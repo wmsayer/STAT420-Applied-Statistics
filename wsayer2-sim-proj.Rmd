@@ -1,0 +1,862 @@
+---
+title: 'Week 6 - Simulation Project'
+author: "STAT 420, Summer 2020, William Sayer"
+date: '6/20/2020'
+output:
+  html_document: 
+    theme: dark
+    toc: yes 
+    number_sections: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+  pdf_document: default
+urlcolor: cyan
+---
+
+***
+
+```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
+options(scipen = 1, digits = 4, width = 80)
+library(knitr)
+opts_chunk$set(cache = TRUE, autodep = TRUE)
+```
+
+
+# Simulation Study 1: Significance of Regression
+
+## Introduction
+
+In this simulation study I investigate the significance of regression test. I simulate using two different models:
+
+1. The **"significant"** model
+
+\[
+Y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \beta_3 x_{i3} + \epsilon_i
+\]
+
+where $\epsilon_i \sim N(0, \sigma^2)$ and
+
+- $\beta_0 = 3$
+- $\beta_1 = 1$
+- $\beta_2 = 1$
+- $\beta_3 = 1$
+
+
+2. The **"non-significant"** model
+
+\[
+Y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \beta_3 x_{i3} + \epsilon_i
+\]
+
+where $\epsilon_i \sim N(0, \sigma^2)$ and
+
+- $\beta_0 = 3$
+- $\beta_1 = 0$
+- $\beta_2 = 0$
+- $\beta_3 = 0$
+
+For both, I consider a sample size of $25$ and three possible levels of noise.
+
+- $n = 25$
+- $\sigma \in (1, 5, 10)$
+
+For each of the three values of $\sigma$, I use simulation to obtain an emperical distribution for each of the following values:
+
+- The **$F$ statistic** for the significance of regression test
+- The **p-value** for the significance of regression test
+- The **$R^2$** value to represent what proportion of the total error is explained by the model
+
+For each model and $\sigma$ combination, I use $2000$ simulations. For each simulation, I fit a regression model of the same form used to perform the simulation.
+
+This simulation study uses the data found in [`study_1.csv`](study_1.csv) for the values of the predictors. These are kept constant for the entirety of this study (the `y` values in this data are a blank placeholder).
+
+## Methods
+
+</br>
+Set the seed for randomization.
+</br>
+
+```{r}
+birthday = 19930413
+set.seed(birthday)
+```
+
+</br>
+Initialize noise and models as described above.
+</br>
+
+```{r}
+# number of simulations
+num_sim = 2000
+
+# initialize noise levels
+sigma_vals = c(1 ,5, 10)
+
+# initialize the two models
+models = c("Significant", "Non-Significant")
+beta_coef = data.frame(c(3, 1, 1, 1), c(3, 0, 0, 0))
+colnames(beta_coef) = models
+
+```
+
+</br>
+Initialize X matrix predictors from data found in [`study_1.csv`](study_1.csv).
+</br>
+
+```{r}
+# load data from "study_1.csv"
+sim1_data = read.csv("study_1.csv")
+
+# initialize X matrix
+sample_size = nrow(sim1_data)
+x0 = rep(1, sample_size)
+X = cbind(x0, sim1_data[["x1"]], sim1_data[["x2"]], sim1_data[["x3"]])
+
+# covariance matrix C
+C = solve(t(X) %*% X)
+```
+
+</br>
+Initialize a dataframe to store the results of the simulation.
+</br>
+
+```{r}
+# the total number of records we will need to store
+num_trials = length(models) * length(sigma_vals) * num_sim
+
+sim1_results = data.frame(model = rep("x", num_trials), 
+                          sigma = rep(0, num_trials),
+                          f_stat = rep(0.0, num_trials),
+                          p_val = rep(0.0, num_trials),
+                          r_squared = rep(0.0, num_trials),
+                          b0 = rep(0.0, num_trials),
+                          b1 = rep(0.0, num_trials),
+                          b2 = rep(0.0, num_trials),
+                          b3 = rep(0.0, num_trials)
+                          )
+```
+
+</br>
+Simulate $`r num_sim`$ times for each noise in each model.
+</br>
+
+```{r}
+cur_trial = 1
+
+for (model in models){
+  for (sig in sigma_vals){
+    for (i in seq(1, num_sim)){
+      
+      # error vector for randomization of simulated dataset
+      error_vec = rnorm(sample_size, mean = 0, sd = sig)
+      
+      # calculate the simulated y-values from e known model and new error vector
+      sim1_data["y"] = X %*% beta_coef[[model]] + error_vec
+      
+      # fit the model based on the model formula
+      temp_mod = lm(y ~ ., data = sim1_data)
+      
+      # grab the F-Statistic, p-value, and R^2 for the model
+      f_stat_val = summary(temp_mod)$fstatistic[[1]]
+      p_val = 1 - pf(f_stat_val, df1 = summary(temp_mod)$fstatistic[[2]], df2 = summary(temp_mod)$fstatistic[[3]])
+      r_sq = summary(temp_mod)$r.squared
+      
+      # store results of the fit model
+      sim1_results[cur_trial, "model"] = model
+      sim1_results[cur_trial, "sigma"] = sig
+      sim1_results[cur_trial, "f_stat"] = f_stat_val
+      sim1_results[cur_trial, "p_val"] = p_val
+      sim1_results[cur_trial, "r_squared"] = r_sq
+      sim1_results[cur_trial, "b0"] = summary(temp_mod)$coef[1, "Estimate"]
+      sim1_results[cur_trial, "b1"] = summary(temp_mod)$coef[2, "Estimate"]
+      sim1_results[cur_trial, "b2"] = summary(temp_mod)$coef[3, "Estimate"]
+      sim1_results[cur_trial, "b3"] = summary(temp_mod)$coef[4, "Estimate"]
+      
+      cur_trial = cur_trial + 1
+    }
+  }
+}
+```
+
+## Results
+
+```{r, echo=FALSE, results='asis'}
+  params = seq(1, nrow(beta_coef))
+  nm_rows = length(models) * length(sigma_vals)
+  par(mfrow=c(2, 2))
+
+  for (model in models){
+    
+    cat("### Coefficents: ", model, ' {.tabset}\n\n')
+    
+    cat("Results of the fitted $\\hat\\beta$ coefficients for the ", model,
+        ' Model, displaying actual against the known *true* distribution.\n\n')
+    
+    for (sig in sigma_vals){
+      
+      cat("#### Sigma: ", sig, '<br>', '\n\n')
+      
+      for (param_i in params){
+           mask = sim1_results$model == model & sim1_results$sigma == sig
+           res = sim1_results[mask, ]
+           
+           param_sd = sqrt(sig^2 * C[param_i, param_i])
+          
+           xlab = bquote(hat(beta)[.(param_i-1)])
+          
+           temp_hist = hist(res[, 5 + param_i], prob = TRUE, col="green", xlab = xlab, 
+                           main= paste(model, ", sd = ", sig))
+           temp_curve = curve(dnorm(x, mean = beta_coef[param_i, model], sd = param_sd), 
+                              add=TRUE, col="blue", lwd=2)
+      }
+      
+      cat('\n', '<br>', '\n\n')
+      
+    }
+  }
+```
+
+```{r, echo=FALSE, results='asis'}
+for (model in models){
+    
+    cat("### Statistics: ", model, ' {.tabset}\n\n')
+  
+    cat("Results of the F-Statistic, p-value, and $R^2$ values for the models fit to the ", model,
+        ' Model.\n\n')
+      
+      mask = sim1_results$model == model
+      res = sim1_results[mask, ]
+      
+      chartname = "F-Statistic"
+      cat("#### ", chartname, '\n\n')
+      boxplot(f_stat ~ sigma, data = res, main = model, ylab = chartname, xlab = "Sigma")
+      cat('\n', '<br>', '\n\n')
+      
+      chartname = "p-value"
+      cat("#### ", chartname, '\n\n')
+      boxplot(p_val ~ sigma, data = res, main = model, ylab = chartname, xlab = "Sigma")
+      cat('\n', '<br>', '\n\n')
+      
+      chartname = "$R^2$"
+      cat("#### ", chartname, '\n\n')
+      boxplot(r_squared ~ sigma, data = res, main = model, ylab = "R^2", xlab = "Sigma")
+      cat('\n', '<br>', '\n\n')
+}
+
+```
+
+## Discussion
+
+### Coefficients
+
+As a way to ensure the simulations ran as expected I plotted the true distribution of $\hat\beta_j$ values against the simulated distributions. We know these because,
+
+\[
+\hat\beta_j \sim N(\beta_j, \sigma^2 C_{jj})
+\]
+
+where,
+
+\[
+C = (X^TX)^{-1}
+\]
+
+As can be seen from the *Coefficent* charts in *Results* the simulated distributions came out very similar to the true distributions for both the Significant and Non-Significant models. This is because the model does not have to be significant in order to know these distributions. As long as we know $\beta_j$ and $\sigma$, we can plot the true distribution of $\hat\beta_j$ for any given $X$.
+
+### F-Statistic: Significant
+
+For the **Significant** model, both the mean and the variance of the F-Statistic decrease as the noise, $\sigma$ increases. This makes sense because a larger F-Statistic in the *significance of regression* test indicates greater significance.
+
+As we introduce more noise into the simulated dataset, we increase the mean square error to the *full* model, $MSE$, while keeping the mean square difference between the *null* model and the *full* model, $MSD$, relatively constant. Since $F$ is defined as,
+
+\[
+F = \frac{MSD}{MSE}
+\]
+
+increasing the noise has the effect of decreasing the resulting value of $F$.
+
+### F-Statistic: Non-Significant
+
+Looking at the **Non-Significant** model, both the mean and the variance of the resulting F-Statistics are relatively constant as $\sigma$ increases. This is because by definition, the Non-Significant model is not a significant regression of $Y$. We know this model is insignificant because the $\beta_j = 0$ for $j = 1, 2, 3$ and the resulting model is,
+
+
+\[
+Y_i = 3 + \epsilon_i
+\]
+
+In the *significance of regression* test, the null model is,
+
+\[
+Y = \bar y
+\]
+
+These models are effectively the same. The F-distribution by definition is *null* distribution of a test statistic. Therefore, the randomness produced by the simulation of the Non-Significant Model results in the the F-Statistic being randomly distributed on an *F*-distribution with $3$ and $22$ degrees of freedom. The F-distribution itself does not consider noise, only degrees of freedom, therefore the distribution remains relatively constant as $\sigma$ increases.
+
+The only reason we can run a significance of regression test on the Non-Significant model is because we effectively fit the simulated data to the formula `y ~ x1 + x2 + x3`. If we had instead fit the model to the true formula `y ~ 1`, we would not be able to run a significance of regression test on the fitted model because there would be 0 degrees of freedom between the *null* and *full* models; they would be the same.
+
+### p-value
+
+For the **Significant Model**, the p-value increases with noise. This is what we would expect to see because the p-value is the probability (area) on the tail end of the F distribution, and as I stated above, the F-Statistic decreases with noise.
+
+For the **Non-Significant Model**, the p-value averages around and is evenly distributed around 0.5. Again this is due to the fact that the *true* model is the same as the null model. The p-value at the mean F-statistic is 0.5. The even distibution around the mean is due to the randomness produced by the simulation.
+
+### $R^2$
+
+For the **Significant Model**, the $R^2$ value decreases as we increase noise. This is what we expect to see because with low noise, there is significance in the regression, so we expect to see a majority of the total error being explained by the regression. However as we introduce more noise, more of the error is random (by definition). As a result, the $R^2$ value decreases.
+
+For the **Non-Significant** model, the $R^2$ value follows a similar distribution as the F-distribution, just scaled down (specifically by a factor of $\frac{22}{3}$). This is because when the *null* and *true* models are equal, the definition of the F-statistic and $R^2$ are the same, with the difference being that the F-statistic is scaled by degrees of freedom $3$ and $22$.
+
+
+
+
+
+
+# Simulation Study 2: Using RMSE for Selection
+
+## Introduction
+
+In this simulation study I investigate how well Test RMSE selects the “best” model. I will simulate from the following true model:
+
+\[
+Y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \beta_3 x_{i3} + \beta_4 x_{i4} + \beta_5 x_{i5} + \beta_6 x_{i6} + \epsilon_i
+\]
+
+where $\epsilon_i \sim N(0, \sigma^2)$ and
+
+- $\beta_0 = 0$,
+- $\beta_1 = 3$,
+- $\beta_2 = -4$,
+- $\beta_3 = 1.6$,
+- $\beta_4 = -1.1$,
+- $\beta_5 = 0.7$,
+- $\beta_6 = 0.5$.
+
+I consider a sample size of $500$ and three possible levels of noise.
+
+- $n = 500$
+- $\sigma \in (1, 2, 4)$
+
+This simulation study uses the data found in [`study_2.csv`](study_2.csv) for the values of the predictors. These are kept constant for the entirety of this study (the `y` values in this data are a blank placeholder).
+
+Each time I simulate the data, I randomly split the data into train and test sets of equal sizes (250 observations for training, 250 observations for testing).
+
+For each, I fit **nine** models, with forms:
+
+- `y ~ x1`
+- `y ~ x1 + x2`
+- `y ~ x1 + x2 + x3`
+- `y ~ x1 + x2 + x3 + x4`
+- `y ~ x1 + x2 + x3 + x4 + x5`
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6` (the correct form of the model as noted above)
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7`
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8`
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9`
+
+For each model, I calculate Train and Test RMSE.
+
+\[
+\text{RMSE}(\text{model, data}) = \sqrt{\frac{1}{n} \sum_{i = 1}^{n}(y_i - \hat{y}_i)^2}
+\]
+
+I repeat this process with $1000$ simulations for each of the $3$ values of $\sigma$.
+
+## Methods
+
+</br>
+Set the seed for randomization.
+</br>
+
+```{r}
+set.seed(birthday)
+```
+
+</br>
+Initalize model and noise levels.
+</br>
+
+```{r}
+# number of simulations
+num_sim = 1000
+
+# initialize noise levels
+sigma_vals = c(1 , 2, 4)
+
+# initialize model
+beta_coef = data.frame(standard = c(0, 3, -4, 1.6, -1.1, 0.7, 0.5))
+models = names(beta_coef)
+
+```
+
+</br>
+Initialize X matrix predictors from data found in [`study_2.csv`](study_2.csv).
+</br>
+
+```{r}
+# load data from "study_2.csv"
+sim_data = read.csv("study_2.csv")
+x0 = rep(1, nrow(sim_data))
+X = as.matrix(cbind(x0, sim_data[2: 7]))
+
+# define the split between the test and training sets
+train_split = 0.5
+train_size = round(nrow(sim_data) * train_split, 0)
+#test_size = nrow(sim_data) - train_size
+
+# number of parameters which also happens to be the number of formulas to test
+num_params = ncol(sim_data) - 1
+```
+
+</br>
+Dynamically write the formulas to be tested.
+</br>
+
+```{r}
+# initalize a vector to store the formulas to test
+test_forms = rep(c(as.formula(paste("y ~ x"))), num_params)
+
+# number of formulas to test (which also happens to be the same as the number of parameters)
+num_forms = length(test_forms)
+
+# this for loop creates the formulas dynamically
+var_names = names(sim_data)
+for(i in seq(1, num_forms)){
+  temp_form = as.formula(paste(var_names[1],
+                               paste(var_names[2: (1+i)], collapse = " + "),
+                               sep = " ~ "))
+  test_forms[[i]] = temp_form
+}
+
+test_forms
+```
+
+</br>
+Intialize dataframe to store simulation results.
+</br>
+
+```{r}
+# number of records needed to be stored
+num_trials = num_forms * length(sigma_vals) * num_sim
+
+# initialize dataframe to store simulation results
+sim2_results = data.frame(form_i = rep(0, num_trials), 
+                          sigma = rep(0, num_trials),
+                          train_RMSE = rep(0.0, num_trials),
+                          test_RMSE = rep(0.0, num_trials),
+                          sim = rep(0, num_trials)
+                          )
+```
+
+</br>
+Run simulation for $`r num_sim`$ simulations on all formulas at each noise level.
+</br>
+
+```{r}
+# this is the y_mean calculated from the true model
+model_name = models[1]
+y_mean = X %*% beta_coef[[model_name]]
+
+# initialize dataframe to store the formula with smallest Test RMSE for each simulation
+top_models = data.frame(
+                        form_i = rep(0, num_sim*length(sigma_vals)),
+                        sigma = rep(0.0, num_sim*length(sigma_vals))
+                        )
+sim_i = 1
+cur_trial = 1
+
+# loop through each noise level
+for (sig in sigma_vals){
+  
+  # loop through "num_sim" simulations
+  for (i in seq(1, num_sim)){
+    
+    # produce random error to simulate "y" for each simulation iteration
+    error_vec = rnorm(length(sim_data), mean = 0, sd = sig)
+    
+    # calculate "y" from y_mean and error
+    sim_data["y"] = y_mean + error_vec
+    
+    # split data into test and training sets
+    train_idx = sample(1:nrow(sim_data), train_size)
+    test_idx = setdiff(seq(1, nrow(sim_data)), train_idx)
+    train_set = sim_data[train_idx, ]
+    test_set = sim_data[test_idx, ]
+    
+    # initialize vector to store Test RMSE results for each formula of this simulation
+    # will use to compare formulas to find the best model for the current simulation dataset
+    model_comp = rep(0, num_forms)
+    
+    for (form_i in seq(1, num_forms)){
+      
+      # fit model to current formula
+      test_form = test_forms[[form_i]]
+      temp_mod = lm(test_form, data = train_set)
+      
+      # calculate predicted Test/Train y-values in order to calculate Test/Train RMSE
+      y_pred_train = predict(temp_mod)
+      y_pred_test = predict(temp_mod, newdata = test_set[2: (1 + form_i)])
+      
+      train_RMSE = sqrt(mean((train_set$y - y_pred_train)^2))
+      test_RMSE = sqrt(mean((test_set$y - y_pred_test)^2))
+      
+      # store results of the simulation
+      sim2_results[cur_trial, "form_i"] = form_i
+      sim2_results[cur_trial, "sigma"] = sig
+      sim2_results[cur_trial, "train_RMSE"] = train_RMSE
+      sim2_results[cur_trial, "test_RMSE"] = test_RMSE
+      sim2_results[cur_trial, "sim"] = sim_i
+      
+      # store Test RMSE for comparison of all models of this simulation instance
+      model_comp[form_i] = test_RMSE
+      
+      cur_trial = cur_trial + 1
+    }
+    
+    # find and store model with the lowest RMSE in this simulation
+    top_models[sim_i, "form_i"] = which.min(model_comp)
+    top_models[sim_i, "sigma"] = sig
+    
+    sim_i = sim_i + 1
+  }
+}
+```
+
+## Results
+
+```{r, echo=FALSE, results='asis'}
+
+cat("### RMSE Variation {.tabset}\n\n")
+
+cat("Boxplots showing the variation of Test and Train RMSE over all the simulations for each model.\n\n")
+
+for (sig in sigma_vals){
+  
+  cat("#### Sigma: ", sig, '<br>', '\n\n')
+  
+  mask = sim2_results$sigma == sig
+  res = sim2_results[mask, ]
+  par(mfrow=c(1, 2))
+  
+  boxplot(train_RMSE ~ form_i, data = res, main = paste("Train RMSE, sd = ", sig), 
+          ylab = "Train RMSE", xlab = "Formula")
+  
+  boxplot(test_RMSE ~ form_i, data = res, main = paste("Test RMSE, sd = ", sig),
+          ylab = "Test RMSE", xlab = "Formula")
+  
+  cat('\n', '<br>', '\n\n')
+  
+}
+```
+
+```{r, echo=FALSE, results='asis'}
+params = seq(1, nrow(beta_coef))
+param_i = 2
+nm_rows = length(models) * length(sigma_vals)
+
+cat("### Best Model {.tabset}\n\n")
+
+cat("Barplots showing the number of times a model resulted in the lowest Test RMSE over the ", num_sim,
+    " simulations.\n\n")
+
+for (sig in sigma_vals){
+  
+    cat("#### Sigma: ", sig, '<br>', '\n\n')
+    
+    res = top_models$form_i[top_models$sigma == sig]
+    
+    barplot(table(res), col="green", main= paste("Min Test RMSE by Sim, sd = ", sig),
+            ylab = "Frequency", xlab = "Formula")
+    
+    cat('\n', '<br>', '\n\n')
+}
+```
+
+## Discussion
+
+### RMSE Variation: Sigma
+
+The boxplots above show the Test and Train RMSE for each of the formulas. When sigma is low, it is clear the Test and Train RMSE is significantly greater on the underfit models (1-5). As sigma increases, the difference in both Test and Train RMSE between all the models decreases.
+
+This is what we would expect to see because as we introduce more and more noise, the significance of the regression decreases (because the standard squared error increasingly over-powers the prediction from the coefficients) and we expect all models to produce relatively similar results.
+
+### RMSE Variation: Test vs Train
+
+Models 6-9 are all relatively similar for Test and Train RMSE on all simga levels, but their relationship changes between the Train RMSE and the Test RMSE. For the Train RMSE, the error continuously *decreases* from model 6 to 7 to 8 to 9, while the Test RMSE continuously *increases* from model 6 to 7 to 8 to 9.
+
+We see this because when we introduce more predictors to any model the total error will either decrease or stay the same. The error will never get worse because if the predictor is so bad at predicting that it *never* helps reduce error then the regression will fit its corresponding $\beta$ coefficient to 0. If fit to zero, the predictor will have no effect on error, and if fit to a non-zero value then the predictor, by definition of the *best* regression, has helped reduce error.
+
+However this leads to *overfitting* which is why we Test RMSE increase. Since we know the true model only has 6 predictors, any other predictors added to the model past the true 6 are unnecessary. As a result, we effectively train the model to pay attention to a variable that doesn't help predict during training. This may help for the training set and it will reduce error for the reason stated above, but then when we measure error against the Test dataset it is now larger because the relationship fitted to the unnecessary predictor in the training set is no longer relavant (on average) in the test dataset, resulting in larger error.
+
+As sigma increases the overfitting becomes more pronounced.
+
+### Best Model
+
+For each simulation I selected the model that resulted in the lowest test RMSE as the best model for that simulation. The results are seen in the barplots above. For all $\sigma$ values, the true model (Model 6) is selected most often; however, the probability of it being selected decreases as $\sigma$ increases.
+
+With $\sigma = 1$ the true model is selected ~55% of the time, while when $\sigma = 4$ the true model is selected just under 40% of the time.
+
+The range of which models get selected also increases with sigma. When $\sigma = 1$ only models 6-9 were slected throughout the 1000 simulations. This increased to models 3-9 when $\sigma = 2$ and models 2-9 when $\sigma = 4$.
+
+What's interesting to point out is that the models do not necessarily get chosen more often just because they more closely resemble the true model. For example, in the noise levels tested, Model 6 is always chosen the most, Model 7 is always chosen the 2nd most, and Model 9 always gets chosen more often than Model 8. Therefore, it seems introducing and **8th** predictor to the model may result in some degree of overfitting that introducing a **9th** predictor might balance out.
+
+Similarly, when $\sigma = 4$ Model 3 is chosen more often than models 4, 5, and 9 despite being chosen less often than all three of the models for the two lower noise levels. The same relationship is seen the Test RMSE boxplots for the mentioned models. Therefore, it's possible Model 3 might be the 2nd best predictor at high variance, as overfitting becomes more of an issue for the other models (other than model 6).
+
+
+
+# Simulation Study 3: Power
+
+## Introduction
+
+In this simulation study I investigate the **power** of the significance of regression test for simple linear regression. 
+
+\[
+H_0: \beta_{1} = 0 \ \text{vs} \ H_1: \beta_{1} \neq 0
+\]
+
+To recall a few concepts, the *significance* level, $\alpha$, is the probability of a Type I error.
+
+\[
+\alpha = P[\text{Reject } H_0 \mid H_0 \text{ True}] = P[\text{Type I Error}]
+\]
+
+The probability of a Type II error is denoted using $\beta$ (not be confused with a regression parameter).
+
+\[
+\beta = P[\text{Fail to Reject } H_0 \mid H_1 \text{ True}] = P[\text{Type II Error}]
+\]
+
+*Power* is the probability of rejecting $H_0$ when it is not true, that is, $H_1$ is true and $\beta_{1}$ is non-zero.
+
+\[
+\text{Power} = 1 - \beta = P[\text{Reject } H_0 \mid H_1 \text{ True}]
+\]
+
+Therefore, power is the probability that a signal of a particular strength will be detected. Many things affect the power of a test. The parameters I investigate in this study are:
+
+- Sample Size, $n$
+- Signal Strength, $\beta_1$
+- Noise Level, $\sigma$
+
+I simulate from the following model:
+
+\[
+Y_i = \beta_0 + \beta_1 x_i + \epsilon_i
+\]
+
+where $\epsilon_i \sim N(0, \sigma^2)$.
+
+For simplicity, I will let $\beta_0 = 0$, thus $\beta_1$ is essentially controlling the amount of "signal." I will then consider different signals, noises, and sample sizes:
+
+- $\beta_1 \in (-2, -1.9, -1.8, \ldots, -0.1, 0, 0.1, 0.2, 0.3, \ldots, 1.9, 2)$
+- $\sigma \in (1, 2, 4)$
+- $n \in (10, 20, 30)$
+
+I will hold the significance level constant at $\alpha = 0.05$ *(Note: $\alpha$ also has an effect on power, but it will not be investigated in this study)*.
+
+
+For each possible $\beta_1$ and $\sigma$ combination, I will simulate from the true model $1000$ and $5000$ times as a way to investigate the effect of *number of simulations* on the results. For each simulation, I will perform the significance of the regression test. Power is estimated at the given $\alpha$ with:
+
+\[
+\hat{\text{Power}} = \hat{P}[\text{Reject } H_0 \mid H_1 \text{ True}] = \frac{\text{# Tests Rejected}}{\text{# Simulations}}
+\]
+
+It is *possible* to derive an expression for power mathematically, but often this is difficult, so instead, I rely on simulation.
+
+## Methods
+
+</br>
+Set seed for randomization and initialize study parameters as detailed above.
+</br>
+
+```{r}
+set.seed(birthday)
+
+# initialize number of simulations and sample sizes
+num_sim3 = 1000
+num_sim3_2 = 5000
+sample_sizes = c(10, 20, 30)
+
+# initialize noise levels
+sigma_vals3 = c(1, 2, 4)
+
+# initialize beta values to test on
+beta1_vals = seq(-2, 2, by = 0.1)
+
+# declare significance level
+alpha = 0.05
+
+```
+
+</br>
+Initialize dataframe to store results.
+</br>
+
+```{r}
+
+# total number of records we will need to store
+num_records = length(sigma_vals3)*length(sample_sizes)*length(beta1_vals)
+
+# dataframe to store results for 1000 trials and 5000 trials
+sim3_results = data.frame(n = rep(0,num_records),
+                          beta1 = rep(0,num_records),
+                          sig = rep(0,num_records),
+                          power_1000 = rep(0,num_records),
+                          power_5000 = rep(0,num_records))
+
+```
+
+</br>
+Run simulation for `r num_sim3_2` simulations on each $\hat\beta$ and $\sigma$ combination at each sample size. Use the first `r num_sim3` simulations to compare the effect of number of simulations on the results.
+</br>
+
+```{r}
+curr_i = 1
+
+# loop through all noise levels
+for (sig in sigma_vals3){
+    
+  # loop through each beta value
+  for (beta1 in beta1_vals){
+      
+    # loop through each sample size
+    for (n in sample_sizes){
+  
+      # intialize x-vector to be used for all simulations of this sample size
+      x_values = seq(0, 5, length = n) 
+      
+      # initilalize vector to store the p-value of each simulation
+      temp_p_vals = rep(0, num_sim3_2)
+      
+      # loop for 1000 simulations
+      for (i in seq(1, num_sim3_2)){
+        
+        # initialize random error for this simulation
+        ep_i = rnorm(n, mean = 0, sd = sig)
+        
+        # calculate y-values and fit the model
+        y_vals = x_values*beta1 + ep_i
+        temp_mod = lm(y_vals ~ x_values)
+        
+        # store p-value of the simulation
+        temp_p_vals[[i]] = summary(temp_mod)$coef["x_values", "Pr(>|t|)"]
+      }
+      
+      # calculate power for the current sigma, beta1, sample size combination (1000 simulations)
+      power_1000 = sum(temp_p_vals[1:num_sim3] < alpha)/num_sim3
+      # calculate power for the current sigma, beta1, sample size combination (5000 simulations)
+      power_5000 = sum(temp_p_vals < alpha)/num_sim3_2
+            
+      # store results in a dataframe
+      sim3_results[curr_i,] = data.frame(n = n,
+                                         beta1 = beta1,
+                                         sig = sig,
+                                         power_1000 = power_1000,
+                                         power_5000 = power_5000)
+      
+      curr_i = curr_i + 1
+    }
+  }
+}
+```
+
+## Results
+
+```{r echo=FALSE, results="asis"}
+library(ggplot2)
+
+#for (num in c(num_sim3, num_sim3_2)){
+
+  cat("### Power Curves: ", num_sim3, " Simulations {.tabset}\n\n")
+
+  for (sig in sigma_vals3){
+      
+      cat("#### Sigma: ", sig, '<br>', '\n\n')
+    
+      mask = sim3_results$sig == sig
+      temp_set = sim3_results[mask,]
+      
+      print(ggplot(temp_set, aes(x=beta1, y=power_1000, colour=n)) + 
+              
+              geom_point() + 
+              
+              ggtitle(paste('Sigma:', sig, sep='')))
+      
+      cat('\n', '<br>', '\n\n')
+  }
+  
+    cat("### Power Curves: ", num_sim3_2, " Simulations {.tabset}\n\n")
+
+  for (sig in sigma_vals3){
+      
+      cat("#### Sigma: ", sig, '<br>', '\n\n')
+    
+      mask = sim3_results$sig == sig
+      temp_set = sim3_results[mask,]
+      
+      print(ggplot(temp_set, aes(x=beta1, y=power_5000, colour=n)) + 
+              
+              geom_point() + 
+              
+              ggtitle(paste('Sigma:', sig, sep='')))
+      
+      cat('\n', '<br>', '\n\n')
+  }
+  
+#}
+```
+
+
+## Discussion
+
+### Power Curves vs $\beta_1$
+
+The Power Curves show the following relationships between $\beta_1$ and power:
+
+1. As $\beta_1$ moves further from $H_0$ the power increases. This makes sense because as $\beta_1$ moves further away from $H_0$ ($\beta_1 = 0$) it becomes more likely we will Reject $H_0$.
+2. When $\beta_1 = 0$, the power is approximately $\alpha$. This is what we would expect to see because in the the case $\beta_1 = 0$, $H_0$ is now true, meaning our method is now calculating:
+\[
+P[\text{Reject } H_0 \mid H_0 \text{ True}] = P[\text{Type I Error}] = \alpha
+\]
+
+Those general relationships hold true for all $n$ and $\sigma$ values. In the case of changing $n$ and $\sigma$, both alter the Power Curves similarly, but for different reasons.
+
+### Sample Size
+
+As the sample size, $n$, increases for a given $\sigma$, the power curve effectively gets skinnier. Effectively, it increases the rate at which power increases as $\beta_1$ moves further from zero. This is because the hypothesis testing is performed with a t-distribution. Therefore as we increase $n$, we are increasing the degrees of freedom the hypothesis is being tested on.
+
+When you increase the degrees of freedom on a t-distribution, you remove area (probability) from the tails of the curve, making the curve become more *normal*. This decreases the value of the *critical value*, $t$, at which we Reject $H_0$, increasing the probability that *we will* Reject $H_0$ at a given $\beta_1$, which increases the power at that $\beta_1$.
+
+### Noise
+
+As the noise, $\sigma$, increases for a given $n$, the power curve also gets skinnier. However this is because by increasing the noise we are increasing the standard residual error, $s_e$ of the simulated data that the model is fit to. Since the critical value is defined as,
+
+\[
+t_{ \alpha/2, n-2 } * \frac{s_e}{\sqrt{S_{xx}}}
+\]
+
+we are increasing the critical value of the test for a given $\beta_1$.
+
+Another way to consider the affect of $\sigma$ on power is to remember that,
+
+\[
+\hat\beta_1 \sim N(\beta_1, SD[\hat\beta_1])
+\]
+
+where,
+
+\[
+SD[\hat\beta_1] = \frac{\sigma}{\sqrt{S_{xx}}}
+\]
+
+Therefore, we are increasing the standard deviation of $\hat\beta_1$. This streches out the normal distribution of $\hat\beta_1$, making it more likely $\hat\beta_1$ will exist within the range that we Fail to Reject $H_0$. As a result, power decreases for a given $\beta_1$, which we see from our power curve results.
+
+### Simulations
+
+The last parameter investigated in this study was the number of simulations and the affect it has on the power curves. In effect, increasing the number of simulations decreases the *noise* we see in the resulting power curves.
+
+Using $1000$ simulations, we get a good enough idea to recognize the affect each paramater has on the curve, however the curves aren't as smooth as they could be. This most pronounced when $n$ is small and $\sigma$ is large.
+
+When we increase to $5000$ simulations, the curves appear significantly smoother. As stated in the introduction, these curves are not the *true* power curves, they are simply the curves produced by the simulation. This means that each power value for a given $\beta_1$ is an estimate of the true power of the hypothesis test at that $\beta_1$, and as we increase the number of simulations, the estimate will get closer and closer the to the true power.
+
+So if you were using these power curves for an analysis where the accuracy of the curves needed to be closer to the true power, you would probably want to use something closer to 10,000 simulations, depending on your $n$ and $\sigma$.
+
